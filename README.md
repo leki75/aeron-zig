@@ -1,3 +1,3 @@
-# Aeron zig library
+# Aeron library wrapper in zig
 
-This library provides minimal real-logic/aeron client from zig.
+This library provides a wrapper for https://github.com/real-logic/aeron client.

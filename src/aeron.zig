@@ -1,79 +1,5 @@
 const std = @import("std");
-// const aeronC = @cImport({
-//     @cInclude("aeronc.h");
-// });
-
-const aeronC = struct {
-    const aeron_frame_header_t = extern struct {
-        frame_length: i32,
-        version: i8,
-        flags: u8,
-        type: i16,
-    };
-
-    const aeron_data_header_t = extern struct {
-        frame_header: aeron_frame_header_t,
-        term_offset: i32,
-        session_id: i32,
-        stream_id: i32,
-        term_id: i32,
-        reserved_value: i64,
-    };
-
-    const aeron_header_t = extern struct {
-        frame: *aeron_data_header_t,
-        initial_term_id: i32,
-        position_bits_to_shift: usize,
-    };
-
-    const aeron_buffer_claim_t = extern struct {
-        frame_header: *u8,
-        data: [*]u8,
-        length: usize,
-    };
-
-    const AERON_PUBLICATION_NOT_CONNECTED: i64 = -1;
-    const AERON_PUBLICATION_BACK_PRESSURED: i64 = -2;
-    const AERON_PUBLICATION_ADMIN_ACTION: i64 = -3;
-    const AERON_PUBLICATION_CLOSED: i64 = -4;
-    const AERON_PUBLICATION_MAX_POSITION_EXCEEDED: i64 = -5;
-    const AERON_PUBLICATION_ERROR: i64 = -6;
-
-    // error message
-    extern fn aeron_errmsg() [*:0]const u8;
-
-    // context
-    const aeron_context_t = opaque {};
-    extern fn aeron_context_init(*?*aeron_context_t) c_int;
-    extern fn aeron_context_set_dir(*aeron_context_t, [*:0]const u8) c_int;
-    extern fn aeron_context_set_client_name(*aeron_context_t, [*:0]const u8) c_int;
-    extern fn aeron_context_close(*aeron_context_t) c_int;
-
-    // aeron
-    const aeron_t = opaque {};
-    extern fn aeron_init(*?*aeron_t, *aeron_context_t) c_int;
-    extern fn aeron_start(*aeron_t) c_int;
-    extern fn aeron_close(*aeron_t) c_int;
-
-    // subscription
-    const aeron_subscription_t = opaque {};
-    const aeron_async_add_subscription_t = opaque {};
-    extern fn aeron_async_add_subscription(*?*aeron_async_add_subscription_t, *aeron_t, [*:0]const u8, i32, ?*anyopaque, ?*anyopaque, ?*anyopaque, ?*anyopaque) c_int;
-    extern fn aeron_async_add_subscription_poll(*?*aeron_subscription_t, ?*aeron_async_add_subscription_t) c_int;
-    extern fn aeron_subscription_poll(*aeron_subscription_t, aeron_fragment_handler_t, ?*anyopaque, usize) c_int;
-    extern fn aeron_subscription_close(*aeron_subscription_t, ?*anyopaque, ?*anyopaque) c_int;
-    const aeron_fragment_handler_t = *const fn (?*anyopaque, [*]const u8, usize, *aeron_header_t) callconv(.C) void;
-
-    // publication
-    const aeron_async_add_exclusive_publication_t = opaque {};
-    const aeron_exclusive_publication_t = opaque {};
-    extern fn aeron_async_add_exclusive_publication(*?*aeron_async_add_exclusive_publication_t, *aeron_t, [*:0]const u8, i32) c_int;
-    extern fn aeron_async_add_exclusive_publication_poll(*?*aeron_exclusive_publication_t, ?*aeron_async_add_exclusive_publication_t) c_int;
-    extern fn aeron_exclusive_publication_close(*aeron_exclusive_publication_t, ?*anyopaque, ?*anyopaque) c_int;
-    extern fn aeron_exclusive_publication_try_claim(*aeron_exclusive_publication_t, usize, *aeron_buffer_claim_t) i64;
-    extern fn aeron_buffer_claim_commit(buffer_claim: *aeron_buffer_claim_t) c_int;
-    extern fn aeron_buffer_claim_abort(buffer_claim: *aeron_buffer_claim_t) c_int;
-};
+const aeronC = @import("aeronc.zig");
 
 pub const FragmentHandler = aeronC.aeron_fragment_handler_t;
 pub const Header = aeronC.aeron_header_t;
@@ -96,6 +22,14 @@ pub fn errMsg() [*:0]const u8 {
     return aeronC.aeron_errmsg();
 }
 
+fn agentStartFunc(state: ?*anyopaque, role_name: [*c]const u8) callconv(.C) void {
+    if (state != null) {
+        const cpu: u8 = @intCast(@intFromPtr(state));
+        _ = aeronC.aeron_thread_set_affinity(role_name, cpu);
+    }
+    aeronC.aeron_thread_set_name("aeron-conductor");
+}
+
 pub const Context = struct {
     ctx: *aeronC.aeron_context_t,
 
@@ -103,6 +37,14 @@ pub const Context = struct {
         var ctx: ?*aeronC.aeron_context_t = undefined;
         try err(aeronC.aeron_context_init(&ctx));
         return Context{ .ctx = ctx.? };
+    }
+
+    pub fn setConductorCPU(self: Context, cpu: ?u8) !void {
+        self.ctx.agent_on_start_func = agentStartFunc;
+        self.ctx.agent_on_start_state = null;
+        if (cpu != null) {
+            self.ctx.agent_on_start_state = @ptrFromInt(cpu.?);
+        }
     }
 
     pub fn setDir(self: Context, dir: [*:0]const u8) !void {
