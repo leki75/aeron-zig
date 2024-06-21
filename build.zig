@@ -10,6 +10,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    lib.addLibraryPath(.{ .path = "lib" });
+    lib.addLibraryPath(b.path("lib"));
     lib.linkSystemLibrary("aeron_static", .{});
 }

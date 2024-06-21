@@ -41,10 +41,7 @@ pub const Context = struct {
 
     pub fn setConductorCPU(self: Context, cpu: ?u8) !void {
         self.ctx.agent_on_start_func = agentStartFunc;
-        self.ctx.agent_on_start_state = null;
-        if (cpu != null) {
-            self.ctx.agent_on_start_state = @ptrFromInt(cpu.?);
-        }
+        self.ctx.agent_on_start_state = if (cpu != null) @ptrFromInt(cpu.?) else null;
     }
 
     pub fn setDir(self: Context, dir: [*:0]const u8) !void {
@@ -85,6 +82,18 @@ pub const Aeron = struct {
         return Subscription{ .subscription = subscription.? };
     }
 
+    pub fn addPublication(self: Aeron, uri: [*:0]const u8, stream_id: i32) !Publication {
+        var ap: ?*aeronC.aeron_async_add_publication_t = undefined;
+        try err(aeronC.aeron_async_add_publication(&ap, self.client, uri, stream_id));
+
+        var publication: ?*aeronC.aeron_publication_t = null;
+        while (publication == null) {
+            try err(aeronC.aeron_async_add_publication_poll(&publication, ap));
+            if (std.os.linux.sched_yield() < 0) return error.AeronError;
+        }
+        return Publication{ .publication = publication.? };
+    }
+
     pub fn addExclusivePublication(self: Aeron, uri: [*:0]const u8, stream_id: i32) !ExclusivePublication {
         var ap: ?*aeronC.aeron_async_add_exclusive_publication_t = undefined;
         try err(aeronC.aeron_async_add_exclusive_publication(&ap, self.client, uri, stream_id));
@@ -111,6 +120,18 @@ pub const Subscription = struct {
 
     pub fn deinit(self: Subscription) !void {
         return err(aeronC.aeron_subscription_close(self.subscription, null, null));
+    }
+};
+
+pub const Publication = extern struct {
+    publication: *aeronC.aeron_publication_t,
+
+    pub fn tryClaim(self: Publication, length: usize, claim: *BufferClaim) i64 {
+        return aeronC.aeron_publication_try_claim(self.publication, length, &claim.claim);
+    }
+
+    pub fn deinit(self: Publication) !void {
+        return err(aeronC.aeron_publication_close(self.publication, null, null));
     }
 };
 
