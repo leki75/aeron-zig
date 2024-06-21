@@ -41,10 +41,7 @@ pub const Context = struct {
 
     pub fn setConductorCPU(self: Context, cpu: ?u8) !void {
         self.ctx.agent_on_start_func = agentStartFunc;
-        self.ctx.agent_on_start_state = null;
-        if (cpu != null) {
-            self.ctx.agent_on_start_state = @ptrFromInt(cpu.?);
-        }
+        self.ctx.agent_on_start_state = if (cpu != null) @ptrFromInt(cpu.?) else null;
     }
 
     pub fn setDir(self: Context, dir: [*:0]const u8) !void {
@@ -126,7 +123,7 @@ pub const Subscription = struct {
     }
 };
 
-pub const Publication = struct {
+pub const Publication = extern struct {
     publication: *aeronC.aeron_publication_t,
 
     pub fn tryClaim(self: Publication, length: usize, claim: *BufferClaim) i64 {
