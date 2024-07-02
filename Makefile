@@ -9,15 +9,20 @@ OS   := $(shell uname -s)
 .DEFAULT_GOAL := generate
 .PHONY: generate clean
 
-generate: $(AERON_SOURCE) lib/libaeron_static.a src/aeronc.zig
+generate: $(AERON_SOURCE) lib/libaeron_static_musl.a lib/libaeron_static_libc.a src/aeronc.zig
 
 $(AERON_SOURCE):
 	curl -sLo - https://github.com/real-logic/aeron/archive/refs/tags/$(AERON_VERSION).tar.gz | tar xzf -
 
-lib/libaeron_static.a:
+lib/libaeron_static_musl.a:
+	docker run --rm -u $$(id -u):$$(id -g) -v $(PWD)/lib:/local/lib --entrypoint /bin/sh \
+	  gcr.io/alpacahq/aeron-driver-c:$(AERON_VERSION)-alpine \
+	  -c 'cp -r /usr/local/lib/libaeron_static.a /local/lib/libaeron_static_musl.a'
+
+lib/libaeron_static_libc.a:
 	docker run --rm -u $$(id -u):$$(id -g) -v $(PWD)/lib:/local/lib --entrypoint /bin/sh \
 	  gcr.io/alpacahq/aeron-driver-c:$(AERON_VERSION) \
-	  -c 'cp -r /usr/local/lib/libaeron_static.a /local/lib/'
+	  -c 'cp -r /usr/local/lib/libaeron_static.a /local/lib/libaeron_static_libc.a'
 
 src/aeronc.zig: $(AERON_SOURCE)
 ifeq ("$(ARCH) $(OS)", "x86_64 Linux")
@@ -28,7 +33,7 @@ else
 endif
 
 clean:
-	@rm -rf $(AERON_SOURCE) zig-cache zig-out
+	@rm -rf $(AERON_SOURCE) .zig-cache zig-out
 
 dist-clean: clean
 	@rm -rf lib/libaeron_static.a src/aeronc.zig
