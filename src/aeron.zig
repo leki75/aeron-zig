@@ -4,6 +4,8 @@ const aeronC = @import("aeronc.zig");
 pub const FragmentHandler = aeronC.aeron_fragment_handler_t;
 pub const Header = aeronC.aeron_header_t;
 pub const DataHeader = aeronC.aeron_data_header_t;
+pub const CncConstants = aeronC.aeron_cnc_constants_t;
+pub const CounterReaderForeachFunc = aeronC.aeron_counters_reader_foreach_counter_func_t;
 
 pub const PUBLICATION_NOT_CONNECTED = aeronC.AERON_PUBLICATION_NOT_CONNECTED;
 pub const PUBLICATION_BACK_PRESSURED = aeronC.AERON_PUBLICATION_BACK_PRESSURED;
@@ -18,6 +20,10 @@ fn err(e: c_int) !void {
     }
 }
 
+pub fn versionFull() [*c]const u8 {
+    return aeronC.aeron_version_full();
+}
+
 pub fn errMsg() [*:0]const u8 {
     return aeronC.aeron_errmsg();
 }
@@ -29,6 +35,40 @@ fn agentStartFunc(state: ?*anyopaque, role_name: [*c]const u8) callconv(.C) void
     }
     aeronC.aeron_thread_set_name("aeron-conductor");
 }
+
+pub const CountersReader = struct {
+    reader: ?*aeronC.aeron_counters_reader_t,
+
+    pub fn foreach(self: *CountersReader, f: CounterReaderForeachFunc, clientd: ?*anyopaque) void {
+        aeronC.aeron_counters_reader_foreach_counter(self.reader.?, f, clientd);
+    }
+};
+
+pub const Cnc = struct {
+    cnc: *aeronC.aeron_cnc_t,
+
+    pub fn init(dir: [*:0]const u8, timeout: i64) !Cnc {
+        var cnc: ?*aeronC.aeron_cnc_t = undefined;
+        try err(aeronC.aeron_cnc_init(&cnc, dir, timeout));
+        return .{ .cnc = cnc.? };
+    }
+
+    pub fn constants(self: *Cnc) !CncConstants {
+        var c: CncConstants = undefined;
+        try err(aeronC.aeron_cnc_constants(self.cnc, &c));
+        return c;
+    }
+
+    pub fn countersReader(self: *Cnc) !CountersReader {
+        return CountersReader{
+            .reader = aeronC.aeron_cnc_counters_reader(@ptrCast(self.cnc)),
+        };
+    }
+
+    pub fn deinit(self: *Cnc) void {
+        aeronC.aeron_cnc_close(self.cnc);
+    }
+};
 
 pub const Context = struct {
     ctx: *aeronC.aeron_context_t,
@@ -68,6 +108,10 @@ pub const Aeron = struct {
 
     pub fn start(self: Aeron) !void {
         return err(aeronC.aeron_start(self.client));
+    }
+
+    pub fn countersReader() !CountersReader {
+        aeronC.aeron_counters_reader();
     }
 
     pub fn addSubscription(self: Aeron, uri: [*:0]const u8, stream_id: i32) !Subscription {
