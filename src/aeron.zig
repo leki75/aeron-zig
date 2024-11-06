@@ -15,6 +15,10 @@ pub const PublicationResult = enum(c_long) {
     max_position_exceeded = aeronC.AERON_PUBLICATION_MAX_POSITION_EXCEEDED,
     other_error = aeronC.AERON_PUBLICATION_ERROR,
     _,
+
+    pub fn isError(self: PublicationResult) bool {
+        return @intFromEnum(self) < 0;
+    }
 };
 
 fn err(e: c_int) !void {
