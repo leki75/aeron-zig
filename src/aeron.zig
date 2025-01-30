@@ -7,12 +7,19 @@ pub const DataHeader = aeronC.aeron_data_header_t;
 pub const CncConstants = aeronC.aeron_cnc_constants_t;
 pub const CounterReaderForeachFunc = aeronC.aeron_counters_reader_foreach_counter_func_t;
 
-pub const PUBLICATION_NOT_CONNECTED = aeronC.AERON_PUBLICATION_NOT_CONNECTED;
-pub const PUBLICATION_BACK_PRESSURED = aeronC.AERON_PUBLICATION_BACK_PRESSURED;
-pub const PUBLICATION_ADMIN_ACTION = aeronC.AERON_PUBLICATION_ADMIN_ACTION;
-pub const PUBLICATION_CLOSED = aeronC.AERON_PUBLICATION_CLOSED;
-pub const PUBLICATION_MAX_POSITION_EXCEEDED = aeronC.AERON_PUBLICATION_MAX_POSITION_EXCEEDED;
-pub const PUBLICATION_ERROR = aeronC.AERON_PUBLICATION_ERROR;
+pub const PublicationResult = enum(c_long) {
+    not_connected = aeronC.AERON_PUBLICATION_NOT_CONNECTED,
+    back_pressured = aeronC.AERON_PUBLICATION_BACK_PRESSURED,
+    admin_action = aeronC.AERON_PUBLICATION_ADMIN_ACTION,
+    closed = aeronC.AERON_PUBLICATION_CLOSED,
+    max_position_exceeded = aeronC.AERON_PUBLICATION_MAX_POSITION_EXCEEDED,
+    other_error = aeronC.AERON_PUBLICATION_ERROR,
+    _,
+
+    pub fn isError(self: PublicationResult) bool {
+        return @intFromEnum(self) < 0;
+    }
+};
 
 fn err(e: c_int) !void {
     if (e < 0) {
@@ -174,8 +181,8 @@ pub const Subscription = struct {
 pub const Publication = extern struct {
     publication: *aeronC.aeron_publication_t,
 
-    pub fn tryClaim(self: Publication, length: usize, claim: *BufferClaim) i64 {
-        return aeronC.aeron_publication_try_claim(self.publication, length, &claim.claim);
+    pub fn tryClaim(self: Publication, length: usize, claim: *BufferClaim) PublicationResult {
+        return @enumFromInt(aeronC.aeron_publication_try_claim(self.publication, length, &claim.claim));
     }
 
     pub fn deinit(self: Publication) !void {
@@ -186,8 +193,8 @@ pub const Publication = extern struct {
 pub const ExclusivePublication = struct {
     publication: *aeronC.aeron_exclusive_publication_t,
 
-    pub fn tryClaim(self: ExclusivePublication, length: usize, claim: *BufferClaim) i64 {
-        return aeronC.aeron_exclusive_publication_try_claim(self.publication, length, &claim.claim);
+    pub fn tryClaim(self: ExclusivePublication, length: usize, claim: *BufferClaim) PublicationResult {
+        return @enumFromInt(aeronC.aeron_exclusive_publication_try_claim(self.publication, length, &claim.claim));
     }
 
     pub fn deinit(self: ExclusivePublication) !void {
